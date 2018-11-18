@@ -106,7 +106,7 @@ $ tar xfz spark-2.2.0-bin-hadoop2.7.tgz
 
 > *请注意，如果下载不同的版本，应该相应地调整上面使用的相关命令和其他地方。*
 
-![下载 Apache Spark](doc/image/download-apache-spark.png)
+![下载 Apache Spark](doc/images/download-apache-spark.png)
 
 Spark 的机器学习库 [MLlib](http://spark.apache.org/mllib)依赖于 [Numpy](http://www.numpy.org)，运行以下命令安装 Numpy：
 ```
