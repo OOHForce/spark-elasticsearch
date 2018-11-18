@@ -11,7 +11,7 @@
 * 将训练后的模型导出到 Elasticsearch 中。
 * 使用一个自定义 Elasticsearch 插件，计算 _个性化用户_ 和 _类似条目_ 推荐，并将推荐与搜索和内容过滤相结合。
 
-![架构图](doc/image/architecture.png)
+![架构图](doc/images/architecture.png)
 
 ## 操作流程
 1. 将数据集加载到 Spark 中。
