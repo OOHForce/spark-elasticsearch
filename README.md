@@ -32,8 +32,8 @@
 2. [下载 Elasticsearch Spark 连接器](#3-download-the-elasticsearch-spark-connector)
 3. [下载 Apache Spark](#4-download-apache-spark)
 4. [数据准备](#5-prepare-the-data)
-5. [启动 Notebook](#6-launch-the-notebook)
-6. [运行 Notebook](#7-run-the-notebook)
+5. [代码结构](#6-code-structure)
+6. [推荐过程](#7-recommendation-process)
 
 ### 1.设置 Elasticsearch
 
@@ -125,9 +125,17 @@ $ pip install numpy
 
 数据文件的格式可以参考 [Movielens 数据集](https://grouplens.org/datasets/movielens/)，其中包含一组电影用户提供的评分和电影元数据。我们的数据集可以完全照此准备。
 
-### 5.启动 Notebook
+### 5.代码结构
 
-> 该 Notebook 应该适用于 Python 2.7 或 3.x（而且已在 2.7.11 和 3.6.1 上测试）
+> 本代码适用于 Python 3.x，已在 3.6.5 上测试。
+
+推荐模块包中有如下几个文件：
+* __init__.py，定义包中要引用的其它属性和方法。
+* dataset.py，使用 Spark 读取原始的数据文件，转换为 Dataframe 便于训练和评测模型的训练集和测试集。
+* esoperation.py，创建在 Elasticsearch 的索引，用于保存训练好的模型数据和其它元数据。
+* prediction.py，基于保存在 Elasticsearch 中的数据，通过elasticsearch-vector-scoring插件中的余弦相似度算法来对用户喜好做出预测。
+* trainmodel.py，用于模型训练，核心算法采用 pyspark.ml.recommendation 包中的ALS。
+* 
 
 要运行该 Notebook，您需要在一个 Jupyter Notebook 中启动一个 PySpark 会话。如果没有安装 Jupyter，可以运行以下命令来安装它：
 ```
