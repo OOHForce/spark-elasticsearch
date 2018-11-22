@@ -127,43 +127,132 @@ $ pip install numpy
 
 ### 5.代码结构
 
-> 本代码适用于 Python 3.x，已在 3.6.5 上测试。
-
 推荐模块包中有如下几个文件：
 * __init__.py，定义包中要引用的其它属性和方法。
 * dataset.py，使用 Spark 读取原始的数据文件，转换为 Dataframe 便于训练和评测模型的训练集和测试集。
 * esoperation.py，创建在 Elasticsearch 的索引，用于保存训练好的模型数据和其它元数据。
 * prediction.py，基于保存在 Elasticsearch 中的数据，通过elasticsearch-vector-scoring插件中的余弦相似度算法来对用户喜好做出预测。
 * trainmodel.py，用于模型训练，核心算法采用 pyspark.ml.recommendation 包中的ALS。
-* 
+* recommender.py，构建从数据准备、模型训练到完成预测的 pipeline，业务系统调用推荐系统的入口。
 
-要运行该 Notebook，您需要在一个 Jupyter Notebook 中启动一个 PySpark 会话。如果没有安装 Jupyter，可以运行以下命令来安装它：
+> 本代码适用于 Python 3.x，已在 3.6.5 上完成测试。
+> 包中每个 .py 文件都带有 \_test() 方法，可以看作是单元测试，用于测试类中的方法是否正确。
+
+### 6.推荐过程
+
+本推荐系统采用离线训练、在线推荐的模式，模型训练的入口是 recommender.py 文件，在线推荐的入口是 Elasticsearch 的 RESTful 接口。
+
+1. 如果要训练模型，可以打开一个终端窗口中，切换到推荐模块包所在的文件夹，然后执行以下命令：
 ```
-$ pip install jupyter
+$ python recommender.py
 ```
 
-在启动 Notebook 时，记得在类路径上包含来自[第 3 步](#3-download-the-elasticsearch-spark-connector) 的 Elasticsearch Spark 连接器 JAR。
+命令执行完毕，模型就已训练好并存入 Elasticsearch 备用。
 
-运行以下命令，以便在本地启动您的 PySpark Notebook 服务器。**要正确运行此命令，需要从您在[第 1 步](#1-clone-the-repo)克隆的 Code Pattern 存储库的基本目录启动该 Notebook**。如果您不在该目录中，请先通过 `cd` 命令进入该目录。
+> 理想状态下，当业务系统中产生新的用户行为数据，模型也应该重新训练。但是模型训练本身是一个耗时的过程，且会占用较高的 CPU 和内存，所以可以根据用户行为数据的变化频率与业务系统对模型准确性的要求，定时地执行建模过程，在资源与性能之间取得一个平衡。
 
+2. 因为训练好的模型与元数据都保存在 Elasticsearch 中，所以最终业务系统是通过调用 Elasticsearch 原生的 RESTful 接口产生推荐结果。创建索引与执行查询与正常的 Elasticsearch 使用方式没有区别。
+
+> 如下是推荐系统在 Elasticsearch 上创建的索引结构：
 ```
-PYSPARK_DRIVER_PYTHON="jupyter" PYSPARK_DRIVER_PYTHON_OPTS="notebook" ../spark-2.2.0-bin-hadoop2.7/bin/pyspark --driver-memory 4g --driver-class-path ../../elasticsearch-hadoop-5.3.0/dist/elasticsearch-spark-20_2.11-5.3.0.jar
+index_body = {
+    "settings": {
+        "analysis": {
+            "analyzer": {
+                # this configures the custom analyzer we need to parse
+                # vectors such that the scoring plugin will work correctly
+                "payload_analyzer": {
+                    "type": "custom",
+                    "tokenizer":"whitespace",
+                    "filter":"delimited_payload_filter"
+                }
+            }
+        }
+    },
+    "mappings": {
+        "ratings": {
+          # this mapping definition sets up the fields for the rating
+          # events
+          "properties": {
+                "userId": {
+                    "type": "integer"
+                },
+                "movieId": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "double"
+                },
+                "timestamp": {
+                    "type": "date"
+                }
+            }  
+        },
+        "users": {
+            # this mapping definition sets up the metadata fields for 
+            # the users
+            "properties": {
+                "userId": {
+                    "type": "integer"
+                },
+                "@model": {
+                    # this mapping definition sets up the fields for user
+                    # factor vectors of our model
+                    "properties": {
+                        "factor": {
+                            "type": "text",
+                            "term_vector": "with_positions_offsets_payloads",
+                            "analyzer" : "payload_analyzer"
+                        },
+                        "version": {
+                            "type": "keyword"
+                        },
+                        "timestamp": {
+                            "type": "date"
+                        }
+                    }
+                }
+            }
+        },
+        "movies": {
+            # this mapping definition sets up the metadata fields for
+            # the movies
+            "properties": {
+                "movieId": {
+                    "type": "integer"
+                },
+                "tmdbId": {
+                    "type": "keyword"
+                },
+                "genres": {
+                    "type": "keyword"
+                },
+                "release_date": {
+                    "type": "date",
+                    "format": "year"
+                },
+                "@model": {
+                    # this mapping definition sets up the fields for 
+                    # movie factor vectors of our model
+                    "properties": {
+                        "factor": {
+                            "type": "text",
+                            "term_vector": "with_positions_offsets_payloads",
+                            "analyzer" : "payload_analyzer"
+                        },
+                        "version": {
+                            "type": "keyword"
+                        },
+                        "timestamp": {
+                            "type": "date"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 ```
-
-这会打开一个浏览器窗口，其中显示了 Code Pattern 文件夹内容。单击 `notebooks` 子文件夹，然后单击 `elasticsearch-spark-recommender.ipynb` 文件启动该 Notebook。
-
-![启动 Notebook](doc/image/launch-notebook.png)
-
-> _可选：_
->
-> 要在推荐演示中显示图像，您需要访问 [The Movie Database API](https://www.themoviedb.org/documentation/api)。请按照[操作说明](https://developers.themoviedb.org/3/getting-started) 获取 API 密钥。您还需要使用以下命令安装 Python 客户端：
-```
-$ pip install tmdbsimple
-```
->
-> 不访问此 API 也能执行该演示，但不会显示图像（所以看起来不太美观！）。
-
-### 6.运行该 Notebook
 
 执行一个 Notebook 时，实际情况是，
 按从上往下的顺序执行该 Notebook 中的每个代码单元。
